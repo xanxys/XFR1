@@ -1,0 +1,30 @@
+## 8bit AVR compilation code
+
+# project-dependent config
+arch="atmega328p"
+files=["build/programmer.c","build/common/base_protocol.c"]
+
+VariantDir('build','src')
+
+# common code
+env=Environment(AS="avr-as",CC="avr-gcc",
+    CCFLAGS="-D F_CPU=16000000L -mmcu=%s -std=gnu99 -Wall -O2"%arch,
+    LINKFLAGS="-mmcu=%s"%arch)
+
+
+env.Append(BUILDERS=
+    {"Copy":Builder(action="avr-objcopy $SOURCE -O ihex $TARGET")
+    ,"Dump":Builder(action="avr-objdump -dSr $SOURCE > $TARGET")
+    ,"WriteProgrammer":Builder(action=
+        "sudo avrdude -p m328p -c arduino -p m328p -b 57600 -U flash:w:$SOURCE:i")
+    })
+
+env.Alias('write',env.WriteProgrammer(None,'build/fw.hex'))
+env.Alias('compile',env.Program('build/fw.elf',files))
+env.Alias('compile',env.Copy('build/fw.hex','build/fw.elf'))
+env.Alias('compile',env.Dump('build/disasm.S','build/fw.elf'))
+
+env.Default('compile')
+
+
+
