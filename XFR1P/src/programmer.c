@@ -3,6 +3,11 @@ XFR1P: 指から文字がどんどん出てくる
 optical programmer
 **************************************************************************
 Pin Assignment: Arduino duemilanove
+
+(PB0) digital 8: RST (2)
+(PB1/OC1A) digital 9: TX (3)
+(PB2) digital 10: RX (4)
+
 **************************************************************************/
 #include <util/delay.h>
 #include <avr/io.h>
@@ -12,39 +17,39 @@ Pin Assignment: Arduino duemilanove
 #include <avr/pgmspace.h>
 #include "common/base_protocol.h"
 
+#define BUFFER_LENGTH 128
+
 /***************************************************************************
  HW wrapper
 ***************************************************************************/
 void init(){
     wdt_disable();
     
-    // shutdown most peripherals
-    PRR=
-        _BV(PRTWI)|_BV(PRSPI)|_BV(PRUSART0)|_BV(PRADC)|
-        _BV(PRTIM2)|_BV(PRTIM1);
+    // port direction
+    DDRB=_BV(0)|_BV(1); // RST+TX as output
     
-    // output:{RXVcc,LED} input:others
-    DDRD=_BV(7)|_BV(6);
+    // configure IR LED port
+    TCCR1A=_BV(WGM11)|_BV(WGM10);
+    TCCR1B=_BV(WGM13)|_BV(WGM12)|_BV(CS10);
+    OCR1A=210; // 16MHz/(1+OCR1A)/2=38kHz
     
-    // Timer 0: Mode 7 (Fast PWM)
-    TCCR0A=_BV(WGM01)|_BV(WGM00); // OC0A
-    TCCR0B=_BV(WGM02)|_BV(CS00); // no scaling (6MHz)
-    OCR0A=78; // 6MHz/(1+OCR0A)/2=38kHz
+    // serial port
+    UBRR0=51; // 19.2kbaud/s
     
     sei();
 }
 
 void tx_set(uint8_t v){
     if(v)
-        TCCR0A|=_BV(COM0A0);
+        TCCR1A|=_BV(COM1A0);
     else{
-        TCCR0A&=~_BV(COM0A0);
-        PORTD&=~0x40;
+        TCCR1A&=~_BV(COM1A0);
+        PORTB&=~_BV(1);
     }
 }
 
 uint8_t rx_check(){
-    return !(PIND&0x20);
+    return !(PINB&_BV(2));
 }
 
 
@@ -54,6 +59,7 @@ uint8_t rx_check(){
 
 
 void session(){
+/*
     uint8_t p_buffer[255];
     uint16_t p_size=recv_packet(255,p_buffer);
     
@@ -92,11 +98,54 @@ void session(){
         do_power();
         return;
     }
+*/
 }
 
+// return: positive: length excluding CR or LF
+// return negative: somehow failed
+// this will ignore empty string
+int getline(int size,char *ptr){
+    int n=0;
+    while(n<size){
+        while(!(UCSR0A&_BV(RXC0)));
+        char ch=UDR0;
+        
+        if(ch=='\r' || ch=='\n'){
+            if(n>0) return n;
+        }
+        else
+            ptr[n++]=ch;
+    }
+    return -1;
+}
+
+void puts(char *str){
+    while(*str){
+        while(!(UCSR0A&_BV(UDRE0)));
+        UDR0=*str;
+        str++;
+    }
+}
 
 int main(){
+    init();
+    
+    // activate reset
+    PORTB|=_BV(0);
+    
+
     while(1){
+        char buffer[BUFFER_LENGTH];
+        int size=getline(BUFFER_LENGTH,buffer);
+        
+        if(size<0){
+            // overflow
+            puts("overflow\r\n");
+        }
+        else{
+            // run command
+            puts("success\r\n");
+        }
     }
 }
 
