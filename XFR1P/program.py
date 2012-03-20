@@ -12,6 +12,15 @@ def enter_normal(ser):
     ser.write(bytes('n\r\n','UTF-8'))
     print(ser.readline())
 
+def get_power(ser):
+    print('checking power')
+    print('sending request')
+    ser.write(bytes('s02\r\n','UTF-8'))
+    print(ser.readline())
+    print('waiting response')
+    ser.write(bytes('r\r\n','UTF-8'))
+    print(ser.readline())
+
 if len(sys.argv)<=1:
     print('usage: program.py <serial port path>')
 else:
@@ -20,4 +29,6 @@ else:
     print(ser)
 
     enter_debug(ser)
-    enter_normal(ser)
+    get_power(ser)
+#    enter_normal(ser)
+

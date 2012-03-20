@@ -15,7 +15,6 @@ Pin Assignment Table:
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-#include <avr/pgmspace.h>
 #include "common/base_protocol.h"
 
 #define BUFFER_LENGTH 128
@@ -162,6 +161,14 @@ uint8_t parse_nibble(char ch){
     return 0xff;
 }
 
+char show_nibble(uint8_t v){
+    if(v<10)
+        return '0'+v;
+    if(v<16)
+        return 'a'+v-10;
+    return 'x';
+}
+
 int send_hex(int size,char *ptr){
     if((size&1)==1){
         putline("#hex wrong format");
@@ -241,7 +248,28 @@ int main(){
                     putline("!");
             }
             else if(buffer[0]=='r'){ // receive packet
-                putline("-");
+                uint8_t buffer[128];
+                int resp_size=recv_packet(128,buffer);
+                if(resp_size==-1){
+                    putline("#recv timed out");
+                    putline("!");
+                }
+                else if(resp_size==-2){
+                    putline("#recv out of sync");
+                    putline("!");
+                }
+                else if(resp_size<0){
+                    putline("#recv unknown failure");
+                    putline("!");
+                }
+                else{
+                    putch('-');
+                    for(int i=0;i<resp_size;i++){
+                        putch(show_nibble(buffer[i]>>4));
+                        putch(show_nibble(buffer[i]&0xf));
+                    }
+                    putline("");
+                }
             }
             else{
                 putline("#unknown command");

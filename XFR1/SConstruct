@@ -9,7 +9,7 @@ VariantDir('build_bootloader','src')
 # common code
 env=Environment(AS="avr-as",CC="avr-gcc",
     CCFLAGS="-D F_CPU=6000000L -mmcu=%s -std=gnu99 -Wall -O2"%arch,
-    LINKFLAGS="-Wl,--section-start=.text=0x3800 -mmcu=%s"%arch)
+    LINKFLAGS="-Wl,--section-start=.text=0x7000 -mmcu=%s"%arch)
 
 
 env.Append(BUILDERS=

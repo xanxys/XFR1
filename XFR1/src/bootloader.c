@@ -74,9 +74,11 @@ void init(){
     wdt_disable();
     
     // shutdown most peripherals
+    /*
     PRR=
         _BV(PRTWI)|_BV(PRSPI)|_BV(PRUSART0)|_BV(PRADC)|
         _BV(PRTIM2)|_BV(PRTIM1);
+        */
     
     // output:{RXVcc,LED} input:others
     DDRD=_BV(7)|_BV(6);
@@ -86,7 +88,7 @@ void init(){
     TCCR0B=_BV(WGM02)|_BV(CS00); // no scaling (6MHz)
     OCR0A=78; // 6MHz/(1+OCR0A)/2=38kHz
     
-    sei();
+//    sei();
 }
 
 void tx_set(uint8_t v){
@@ -251,9 +253,13 @@ void session(){
 
 int main(){
     init();
+    PORTD|=_BV(6);
+//    tx_set(1);
+    while(1);
+    
     void (*userland)()=0;
     
-    if(PIND&0x20){
+    if(0){ // PIND&0x20){
         _delay_ms(200); // protect
         while(1)
             userland();
@@ -261,7 +267,8 @@ int main(){
     else{
         _delay_ms(200); // protect
         while(1)
-            session();
+            do_power();
+//            session();
     }
 }
 
