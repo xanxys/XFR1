@@ -2,7 +2,8 @@
 XFR1P: 指から文字がどんどん出てくる
 optical programmer
 **************************************************************************
-Pin Assignment: Arduino duemilanove
+Pin Assignment Table:
+  (<MCU pin name>) <duemilanove pin> : <XFR1P pin name> (<XFR1P connector pin no.>)
 
 (PB0) digital 8: RST (2)
 (PB1/OC1A) digital 9: TX (3)
@@ -39,6 +40,15 @@ void init(){
     sei();
 }
 
+
+void reset_set(uint8_t v){
+    if(v)
+        PORTB|=_BV(0);
+    else
+        PORTB&=~_BV(0);
+}
+
+
 void tx_set(uint8_t v){
     if(v)
         TCCR1A|=_BV(COM1A0);
@@ -52,6 +62,16 @@ uint8_t rx_check(){
     return !(PINB&_BV(2));
 }
 
+
+char getch(){
+    while(!(UCSR0A&_BV(RXC0)));
+    return UDR0;
+}
+
+void putch(char ch){
+    while(!(UCSR0A&_BV(UDRE0)));
+    UDR0=ch;
+}
 
 /***************************************************************************
  body
@@ -107,8 +127,7 @@ void session(){
 int getline(int size,char *ptr){
     int n=0;
     while(n<size){
-        while(!(UCSR0A&_BV(RXC0)));
-        char ch=UDR0;
+        char ch=getch();
         
         if(ch=='\r' || ch=='\n'){
             if(n>0) return n;
@@ -127,30 +146,84 @@ void puts(char *str){
     }
 }
 
+void putline(char *str){
+    puts(str);
+    puts("\r\n");
+}
+
+
+
+int send_hex(int size,char *ptr){
+    if((size&1)==1){
+        putline("#hex parity mismatch");
+        return -1;
+    }
+    
+    if(size>128){ // 0<=payload size<=64
+        putline("#too big packet");
+        return -2;
+    }
+    
+    
+    
+    
+    return 0;
+}
+
 int main(){
     init();
     
     // activate reset
-    PORTB|=_BV(0);
     
-
+    
+    // enter recv-exec-send loop
     while(1){
         char buffer[BUFFER_LENGTH];
         int size=getline(BUFFER_LENGTH,buffer);
         
         if(size<0){
             // overflow
-            puts("command too long\r\n");
+            putline("#command too long");
         }
         else{
             // run command
-            if(buffer[0]=='v'){
-                puts("version " TIMESTAMP "\r\n");
+            // response
+            // "#" prefix -> human readable
+            // "!" prefix -> failure (machine readable)
+            // "-" prefix -> success (machine readable)
+            
+            if(buffer[0]=='v'){ // show version
+                putline("#version(epoch) " TIMESTAMP);
+                putline("-" TIMESTAMP);
+            }
+            else if(buffer[0]=='d'){ // enter debug mode
+                tx_set(1);
+                reset_set(1);
+                _delay_ms(100);
+                reset_set(0);
+                _delay_ms(100);
+                putline("-");
+            }
+            else if(buffer[0]=='n'){ // enter normal mode
+                tx_set(0);
+                reset_set(1);
+                _delay_ms(100);
+                reset_set(0);
+                _delay_ms(100);
+                putline("-");
+            }
+            else if(buffer[0]=='s'){ // send packet
+                if(send_hex(size-1,&buffer[1])==0)
+                    putline("-");
+                else
+                    putline("!");
+            }
+            else if(buffer[0]=='r'){ // receive packet
+                putline("-");
             }
             else{
-                puts("unknown command\r\n");
+                putline("#unknown command");
             }
-            
         }
     }
 }
