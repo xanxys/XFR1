@@ -1,4 +1,5 @@
 ## 8bit AVR compilation code
+import time
 
 # project-dependent config
 arch="atmega328p"
@@ -8,13 +9,14 @@ VariantDir('build','src')
 
 # common code
 env=Environment(AS="avr-as",CC="avr-gcc",
-    CCFLAGS="-D F_CPU=16000000L -mmcu=%s -std=gnu99 -Wall -O2"%arch,
+    CCFLAGS="-D TIMESTAMP=\\\"%s\\\" -D F_CPU=16000000L -mmcu=%s -std=gnu99 -Wall -O2"
+        %(str(int(time.time())),arch),
     LINKFLAGS="-mmcu=%s"%arch)
 
 
 env.Append(BUILDERS=
     {"Copy":Builder(action="avr-objcopy $SOURCE -O ihex $TARGET")
-    ,"Dump":Builder(action="avr-objdump -dSr $SOURCE > $TARGET")
+    ,"Dump":Builder(action="avr-objdump -tdSr $SOURCE > $TARGET")
     ,"WriteProgrammer":Builder(action=
         "sudo avrdude -p m328p -c arduino -p m328p -b 57600 -P /dev/ttyUSB1 -U flash:w:$SOURCE:i")
     })

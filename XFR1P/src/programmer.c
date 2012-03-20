@@ -140,11 +140,17 @@ int main(){
         
         if(size<0){
             // overflow
-            puts("overflow\r\n");
+            puts("command too long\r\n");
         }
         else{
             // run command
-            puts("success\r\n");
+            if(buffer[0]=='v'){
+                puts("version " TIMESTAMP "\r\n");
+            }
+            else{
+                puts("unknown command\r\n");
+            }
+            
         }
     }
 }
