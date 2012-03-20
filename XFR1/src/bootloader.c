@@ -30,6 +30,30 @@ PD4: -
 PD5: RX signal input
 PD6: TX (LED anode)
 PD7: RX Vcc output
+
+**************************************************************************
+Fuse
+efuse
+
+default(0xff)
+it read as 0x07 … well, upper 5 bits are undefined, so it can be a mistake in datasheet.
+hfuse
+
+BOOTSZ1=0
+BOOTSZ0=0 -> 2048 word boot loader
+BOOTRST:=0 start at boot loader
+default(0xd9) -> 0xd8
+lfuse
+
+CKDIV8:=1 disable CKDIV8
+CKSEL3:=1
+CKSEL2:=1
+CKSEL1:=0
+CKSEL0:=0
+SUT1:=0
+SUT0:=0
+(6MHz low power osc, fast start-up for ceramic)
+default(0x62) -> 0xcc
 **************************************************************************/
 #include <util/delay.h>
 #include <avr/io.h>
