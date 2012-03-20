@@ -254,10 +254,12 @@ int main(){
     void (*userland)()=0;
     
     if(PIND&0x20){
+        _delay_ms(200); // protect
         while(1)
             userland();
     }
     else{
+        _delay_ms(200); // protect
         while(1)
             session();
     }
