@@ -151,11 +151,20 @@ void putline(char *str){
     puts("\r\n");
 }
 
-
+// retval: 0xff: fail
+uint8_t parse_nibble(char ch){
+    if('0'<=ch && ch<='9')
+        return ch-'0';
+    if('a'<=ch && ch<='f')
+        return ch-'a'+10;
+    if('A'<=ch && ch<='F')
+        return ch-'A'+10;
+    return 0xff;
+}
 
 int send_hex(int size,char *ptr){
     if((size&1)==1){
-        putline("#hex parity mismatch");
+        putline("#hex wrong format");
         return -1;
     }
     
@@ -164,17 +173,29 @@ int send_hex(int size,char *ptr){
         return -2;
     }
     
-    
-    
+    send_sym(SYM_START);
+    for(int i=0;i<size;i+=2){
+        uint8_t tu=parse_nibble(ptr[i+0]);
+        if(tu==0xff){
+            putline("#wrong hex format");
+            return -1;
+        }
+        
+        uint8_t tl=parse_nibble(ptr[i+1]);
+        if(tl==0xff){
+            putline("#wrong hex format");
+            return -1;
+        }
+        
+        send_byte((tu<<4)|tl);
+    }
+    send_sym(SYM_STOP);
     
     return 0;
 }
 
 int main(){
     init();
-    
-    // activate reset
-    
     
     // enter recv-exec-send loop
     while(1){
@@ -202,6 +223,7 @@ int main(){
                 _delay_ms(100);
                 reset_set(0);
                 _delay_ms(100);
+                tx_set(0);
                 putline("-");
             }
             else if(buffer[0]=='n'){ // enter normal mode
