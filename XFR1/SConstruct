@@ -15,10 +15,11 @@ env=Environment(AS="avr-as",CC="avr-gcc",
 env.Append(BUILDERS=
     {"Copy":Builder(action="avr-objcopy $SOURCE -O ihex $TARGET")
     ,"Dump":Builder(action="avr-objdump -dSr $SOURCE > $TARGET")
-    ,"Write":Builder(action="avrdude -p m328p -c arduino -P /dev/ttyUSB1 -U flash:w:$SOURCE:i")
+#    ,"Write":Builder(action="avrdude -p m328p -c arduino -P /dev/ttyUSB1 -U flash:w:$SOURCE:i")
+    ,"WriteLoader":Builder(action="sudo avrdude -p m328p -c usbasp -U flash:w:$SOURCE:i")
     })
 
-env.Alias('write',env.Write(None,'build_bootloader/fw.hex'))
+env.Alias('write',env.WriteLoader(None,'build_bootloader/fw.hex'))
 env.Alias('compile',env.Program('build_bootloader/fw.elf',files))
 env.Alias('compile',env.Copy('build_bootloader/fw.hex','build_bootloader/fw.elf'))
 env.Alias('compile',env.Dump('build_bootloader/disasm.S','build_bootloader/fw.elf'))
