@@ -19,9 +19,16 @@ def get_power(ser):
     print('sending request')
     ser.write(bytes('s02\r\n','UTF-8'))
     print(ser.readline())
+    
     print('waiting response')
     ser.write(bytes('r\r\n','UTF-8'))
-    print(ser.readline())
+    r=ser.readline()
+    print(r)
+    if r[0]=='-'
+        v=int(r[1:],16)
+        print('Vcc=%.1f V'%(1.1/(v/256)))
+
+
 
 def show_usage():
     print('usage: program.py [-P <serial port path>] <command>')

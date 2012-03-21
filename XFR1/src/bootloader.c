@@ -226,9 +226,24 @@ void do_power(){
 void session(){
     while(!rx_check());
     int16_t c=recv_byte();
-    _delay_ms(10);
+    
+    if(c==0){
+        uint16_t addr;
+        c=recv_byte();
+        if(c<0) return;
+        addr=c<<8;
+        c=recv_byte();
+        if(c<0) return;
+        addr|=c;
+        
+        _delay_ms(10);
+        send_byte(pgm_read_byte(addr));
+        
+        return;
+    }
     
     if(c==2){
+        _delay_ms(10);
         do_power();
         return;
     }
