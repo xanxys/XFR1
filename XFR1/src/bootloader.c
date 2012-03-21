@@ -225,11 +225,11 @@ void do_power(){
 
 void session(uint8_t *buffer){
     while(!rx_check());
-    int16_t c=recv_byte();
+    int16_t c=recv_byte(10);
     
     // read page buffer
     if(c==0){
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         if(c>=(1<<PAGE_BYTES_N)) return; // out of range
         _delay_ms(10);
@@ -241,12 +241,12 @@ void session(uint8_t *buffer){
     // write page buffer
     if(c==1){
         uint8_t addr;
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         if(c>=(1<<PAGE_BYTES_N)) return; // out of range
         addr=c;
         
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         buffer[addr]=c;
                 
@@ -273,10 +273,10 @@ void session(uint8_t *buffer){
     // fill buffer from ROM
     if(c==4){
         uint16_t addr;
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         addr=c<<8;
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         addr|=c;
         
@@ -291,10 +291,10 @@ void session(uint8_t *buffer){
     // write buffer to ROM
     if(c==5){
         uint16_t addr;
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         addr=c<<8;
-        c=recv_byte();
+        c=recv_byte(10);
         if(c<0) return;
         addr|=c;
         if(addr>=0x7000) return; // out of range

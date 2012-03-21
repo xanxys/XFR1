@@ -13,5 +13,5 @@ uint8_t rx_check();
 uint8_t xorshift_hash(uint8_t sz,uint8_t *ptr);
 
 void send_byte(uint8_t v);
-int16_t recv_byte();
+int16_t recv_byte(uint8_t timeout); // timeout until getting START, roughly in millisec
 

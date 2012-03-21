@@ -246,24 +246,30 @@ int main(){
                     putline("!");
             }
             else if(buffer[0]=='r'){ // receive packet
-                int16_t resp=recv_byte();
-                if(resp==-1){
-                    putline("#recv timed out");
+                if(size!=3)
                     putline("!");
-                }
-                else if(resp==-2){
-                    putline("#recv out of sync");
-                    putline("!");
-                }
-                else if(resp<0){
-                    putline("#recv unknown failure");
-                    putline("!");
-                }
                 else{
-                    putch('-');
-                    putch(show_nibble(resp>>4));
-                    putch(show_nibble(resp&0xf));
-                    putline("");
+                    uint8_t to=(parse_nibble(buffer[1])<<4)|parse_nibble(buffer[2]);
+                    int16_t resp=recv_byte(to);
+                    
+                    if(resp==-1){
+                        putline("#recv timed out");
+                        putline("!");
+                    }
+                    else if(resp==-2){
+                        putline("#recv out of sync");
+                        putline("!");
+                    }
+                    else if(resp<0){
+                        putline("#recv unknown failure");
+                        putline("!");
+                    }
+                    else{
+                        putch('-');
+                        putch(show_nibble(resp>>4));
+                        putch(show_nibble(resp&0xf));
+                        putline("");
+                    }
                 }
             }
             else{

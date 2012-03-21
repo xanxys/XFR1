@@ -26,16 +26,19 @@ void send_byte(uint8_t v){
     _delay_ms(1);
 }
 
-int16_t recv_byte(){
+int16_t recv_byte(uint8_t timeout){
     // START
     uint8_t sync=0;
-    for(uint8_t i=0;i<100;i++){
-        if(rx_check()){
-            _delay_ms(0.5);
-            sync=1;
-            break;
+    for(uint8_t t=0;t<timeout;t++){
+        for(uint8_t i=0;i<10;i++){
+            if(rx_check()){
+                _delay_ms(0.5);
+                sync=1;
+                break;
+            }
+            _delay_ms(0.1);
         }
-        _delay_ms(0.1);
+        if(sync) break;
     }
     if(!sync) return -1;
     _delay_ms(1);
