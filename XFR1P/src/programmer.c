@@ -180,7 +180,6 @@ int send_hex(int size,char *ptr){
         return -2;
     }
     
-    send_sym(SYM_START);
     for(int i=0;i<size;i+=2){
         uint8_t tu=parse_nibble(ptr[i+0]);
         if(tu==0xff){
@@ -196,7 +195,6 @@ int send_hex(int size,char *ptr){
         
         send_byte((tu<<4)|tl);
     }
-    send_sym(SYM_STOP);
     
     return 0;
 }
@@ -248,26 +246,23 @@ int main(){
                     putline("!");
             }
             else if(buffer[0]=='r'){ // receive packet
-                uint8_t buffer[128];
-                int resp_size=recv_packet(128,buffer);
-                if(resp_size==-1){
+                int16_t resp=recv_byte();
+                if(resp==-1){
                     putline("#recv timed out");
                     putline("!");
                 }
-                else if(resp_size==-2){
+                else if(resp==-2){
                     putline("#recv out of sync");
                     putline("!");
                 }
-                else if(resp_size<0){
+                else if(resp<0){
                     putline("#recv unknown failure");
                     putline("!");
                 }
                 else{
                     putch('-');
-                    for(int i=0;i<resp_size;i++){
-                        putch(show_nibble(buffer[i]>>4));
-                        putch(show_nibble(buffer[i]&0xf));
-                    }
+                    putch(show_nibble(resp>>4));
+                    putch(show_nibble(resp&0xf));
                     putline("");
                 }
             }

@@ -2,6 +2,7 @@
 import sys
 import serial
 import argparse
+import time
 
 def enter_debug(ser):
     print('entering debug mode')
@@ -33,8 +34,10 @@ def proc(port_path):
     print(ser)
 
     enter_debug(ser)
-#    get_power(ser)
-    enter_normal(ser)
+    time.sleep(0.5)
+    get_power(ser)
+    time.sleep(0.5)
+  #  enter_normal(ser)
 
 def main():
     ps=argparse.ArgumentParser(description='optical programmer')

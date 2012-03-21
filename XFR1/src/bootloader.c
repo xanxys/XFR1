@@ -116,6 +116,7 @@ uint8_t rx_check(){
  body
 ***************************************************************************/
 
+/*
 void do_read(uint16_t addr,uint8_t size){
     if(addr>ROM_USER_LAST || addr+size>ROM_USER_LAST){
         send_sym(SYM_START);
@@ -201,57 +202,33 @@ void do_write(uint16_t addr,uint8_t size,uint8_t *data){
         send_sym(SYM_STOP);
     }
 }
+*/
 
 void do_power(){
     // run ADC to get voltage ratio
-    uint8_t result=23;
+    uint8_t result=0x17;
     PRR&=~_BV(PRADC);
+    ADMUX=_BV(REFS0)|0xe; // V=Vbg/Vcc
+    ADCSRA=_BV(ADEN)|_BV(ADSC)|0x7; // 16MHz/128=125kHz
     
+    // wait until conversion ends
+    while(ADCSRA&_BV(ADSC));
+    uint8_t val=ADC;
+    
+    // shutdown ADC
     PRR|=_BV(PRADC);
     
     // send result
-    send_sym(SYM_START);
-    send_byte(result);
-    send_sym(SYM_STOP);
+    send_byte(val);
 }
 
 
 void session(){
-    uint8_t p_buffer[255];
-    uint16_t p_size=recv_packet(255,p_buffer);
+    while(!rx_check());
+    int16_t c=recv_byte();
+    _delay_ms(10);
     
-    // read
-    if(p_buffer[0]==0 && p_size==4){
-        uint16_t addr=(p_buffer[1]<<8)|p_buffer[2];
-        uint8_t size=p_buffer[3];
-        
-        // check error
-        if(size>64) return;
-        
-        do_read(addr,size);
-        return;
-    }
-    
-    // write
-    if(p_buffer[0]==1 && p_size>=7){
-        uint16_t addr0=(p_buffer[1]<<8)|p_buffer[2];
-        uint8_t size=p_buffer[3];
-        
-        uint8_t *data=&p_buffer[4];
-        uint16_t addr1=(p_buffer[4+size]<<8)|p_buffer[4+size+1];
-        uint8_t hash=p_buffer[4+size+2];
-        
-        // check error
-        if(size>64) return;
-        if(addr0!=addr1) return;
-        if(xorshift_hash(size,data)!=hash) return;
-        
-        // do_write(addr0,size,data);
-        return;
-    }
-    
-    // power
-    if(p_buffer[0]==2 && p_size==1){
+    if(c==2){
         do_power();
         return;
     }
@@ -268,8 +245,7 @@ int main(){
     if(rx_check()){
         _delay_ms(200); // protect
         while(1)
-            do_power();
-//            session();
+            session();
     }
     else{
         _delay_ms(200); // protect
