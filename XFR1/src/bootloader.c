@@ -60,6 +60,7 @@ default(0x62) -> 0xcc
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+#include <avr/boot.h>
 #include <avr/pgmspace.h>
 #include "common/base_protocol.h"
 
@@ -206,7 +207,6 @@ void do_write(uint16_t addr,uint8_t size,uint8_t *data){
 
 void do_power(){
     // run ADC to get voltage ratio
-    uint8_t result=0x17;
     PRR&=~_BV(PRADC);
     ADMUX=_BV(REFS0)|0xe; // V=Vbg/Vcc
     ADCSRA=_BV(ADEN)|_BV(ADSC)|0x7; // 16MHz/128=125kHz
@@ -223,11 +223,55 @@ void do_power(){
 }
 
 
-void session(){
+void session(uint8_t *buffer){
     while(!rx_check());
     int16_t c=recv_byte();
     
+    // read page buffer
     if(c==0){
+        c=recv_byte();
+        if(c<0) return;
+        if(c>=(1<<PAGE_BYTES_N)) return; // out of range
+        _delay_ms(10);
+        send_byte(buffer[c]);
+        
+        return;
+    }
+    
+    // write page buffer
+    if(c==1){
+        uint8_t addr;
+        c=recv_byte();
+        if(c<0) return;
+        if(c>=(1<<PAGE_BYTES_N)) return; // out of range
+        addr=c;
+        
+        c=recv_byte();
+        if(c<0) return;
+        buffer[addr]=c;
+                
+        _delay_ms(10);
+        send_byte(c);
+        
+        return;
+    }
+    
+    // status
+    if(c==2){
+        _delay_ms(10);
+        do_power();
+        return;
+    }
+    
+    // hash
+    if(c==3){
+        _delay_ms(10);
+        send_byte(xorshift_hash(1<<PAGE_BYTES_N,buffer));
+        return;
+    }
+    
+    // fill buffer from ROM
+    if(c==4){
         uint16_t addr;
         c=recv_byte();
         if(c<0) return;
@@ -236,16 +280,35 @@ void session(){
         if(c<0) return;
         addr|=c;
         
-        _delay_ms(10);
-        send_byte(pgm_read_byte(addr));
+        // read byte-by-byte
+        addr=(addr<<PAGE_BYTES_N)>>PAGE_BYTES_N; // align to page
+        for(int i=0;i<(1<<PAGE_BYTES_N);i++)
+            buffer[i]=pgm_read_byte(addr+i);
         
-        return;
+        send_byte(1<<PAGE_BYTES_N);
     }
     
-    if(c==2){
-        _delay_ms(10);
-        do_power();
-        return;
+    // write buffer to ROM
+    if(c==5){
+        uint16_t addr;
+        c=recv_byte();
+        if(c<0) return;
+        addr=c<<8;
+        c=recv_byte();
+        if(c<0) return;
+        addr|=c;
+        if(addr>=0x7000) return; // out of range
+        
+        addr=(addr<<PAGE_BYTES_N)>>PAGE_BYTES_N; // align to page
+        for(int i=0;i<(1<<PAGE_BYTES_N);i+=2){
+            uint16_t v=buffer[i]|(buffer[i+1]<<8);
+            boot_page_fill(addr+i,v);
+        }
+        
+        boot_page_erase_safe(addr);
+        boot_page_write_safe(addr);
+        
+        send_byte(1<<PAGE_BYTES_N);
     }
 }
 
@@ -259,8 +322,9 @@ int main(){
     
     if(rx_check()){
         _delay_ms(200); // protect
+        uint8_t page_buffer[1<<PAGE_BYTES_N];
         while(1)
-            session();
+            session(page_buffer);
     }
     else{
         _delay_ms(200); // protect
