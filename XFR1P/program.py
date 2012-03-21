@@ -5,6 +5,13 @@ import argparse
 import time
 import logging
 
+# utility
+def xorshift_hash(data):
+    h=0
+    for byte in data:
+        h=((h<<1)|(h>>7))^byte
+    return h
+
 # representing real programmer (arduino) interface
 # bit like RPC over serial
 class Programmer:
@@ -59,7 +66,6 @@ class Programmer:
 class Ring(Programmer):
     def get_power(self):
         print('checking power')
-        print('sending request')
         self.send_byte(2)
         
         print('waiting response')
@@ -67,8 +73,6 @@ class Ring(Programmer):
         print('Vcc=%.1f V'%(1.1/(v/256)))
 
     def read_buffer(self,addr):
-        addr=int(addr,16)
-        
         print('reading buffer offset 0x%02x'%addr)
         self.send_byte(0)
         self.send_byte(addr)
@@ -76,12 +80,10 @@ class Ring(Programmer):
         print('waiting response')
         v=self.recv_byte(10)
         print('%02x'%v)
+        return v
 
 
     def write_buffer(self,addr,data):
-        addr=int(addr,16)
-        data=int(data,16)
-        
         print('writing buffer offset 0x%02x'%addr)
         self.send_byte(1)
         self.send_byte(addr)
@@ -91,41 +93,77 @@ class Ring(Programmer):
         self.recv_byte(10)
 
     def read_page(self,addr):
-        addr=int(addr,16)
-        
         print('reading page 0x%04x to buffer'%addr)
         self.send_byte(4)
         self.send_byte((addr>>8)&0xff)
         self.send_byte(addr&0xff)
         
         print('waiting response')
-        self.recv_byte(10)
+        self.recv_byte(255)
 
     def write_page(self,addr):
-        addr=int(addr,16)
-        
         print('writing page 0x%04x from buffer'%addr)
         self.send_byte(5)
         self.send_byte((addr>>8)&0xff)
         self.send_byte(addr&0xff)
 
         print('waiting response')
-        self.recv_byte(10)
+        self.recv_byte(100)
 
     def hash_buffer(self):
         print('hasing buffer')
         self.send_byte(3)
         
         print('waiting response')
-        v=self.recv_byte(10)
+        v=self.recv_byte(100)
         print('%02x'%v)
 
 
-# high-level function
+# expose flash/buffer of Ring
+class RingMemory(Ring):
+    # page level
+    def read_whole_page(self,addr):
+        def get_offset_with_retry(ofs):
+            retry=0
+            while retry<3:
+                try:
+                    return self.read_buffer(ofs)
+                except IOError:
+                    retry+=1
+            raise IOError('too many retries. aborting page read.')
+            
+        print('reading page %04x'%addr)
+        self.read_page(addr)
+        vs=[get_offset_with_retry(i) for i in range(128)]
+        
+        hr=self.hash_buffer()
+        hd=xorshift_hash(vs)
 
+        if hr!=hr: # data corruption
+            raise IOError('hash mismatch when transferring page: '+
+                'hash(dev)=%02x hash(data)=%02x'%(hr,hd))
+        
+        return bytes(vs)
+    
+    def write_whole_page(self,addr,data):
+        print('writing page %04x'%addr)
+        for i in range(128):
+            self.write_buffer(i,data[i])
+        
+        hr=self.hash_buffer()
+        hd=xorshift_hash(data)
+        
+        if hr!=hr: # data corruption
+            raise IOError('hash mismatch when transferring page: '+
+                'hash(dev)=%02x hash(data)=%02x'%(hr,hd))
+        
+        self.write_page(addr)
+        
+        
+    
 
 def proc(args,fn):
-    prog=Ring(args.port)
+    prog=RingMemory(args.port)
 
     if not args.noreset_enter:
         prog.enter_debug()
@@ -146,24 +184,30 @@ def main():
         action='store_const',help="don't reset to debug mode when entering session")
     ps.add_argument('--noreset_leave',dest='noreset_leave',default=False,const=True,
         action='store_const',help="don't reset to normal mode when leaving session")
-    ps.add_argument('command',choices=
-        ['status','read','write','hash','read_page','write_page'])
+    ps.add_argument('command',choices=[
+        '_status','_read','_write','_hash','_read_page','_write_page', # Ring
+        'read_page','write_page'
+        ])
     args=ps.parse_args()
     
-    if args.command=='status':
+    ## low level interface
+    if args.command=='_status':
         proc(args,lambda p:p.get_power())
     # buffer manipulation
-    elif args.command=='read':
-        proc(args,lambda p:p.read_buffer(args.addr))
-    elif args.command=='write':
-        proc(args,lambda p:p.write_buffer(args.addr,args.data))
-    elif args.command=='hash':
+    elif args.command=='_read':
+        proc(args,lambda p:p.read_buffer(int(args.addr,16)))
+    elif args.command=='_write':
+        proc(args,lambda p:p.write_buffer(int(args.addr,16),int(args.data,16)))
+    elif args.command=='_hash':
         proc(args,lambda p:p.hash_buffer())
     # page manipulation
+    elif args.command=='_read_page':
+        proc(args,lambda p:p.read_page(int(args.addr,16)))
+    elif args.command=='_write_page':
+        proc(args,lambda p:p.write_page(int(args.addr,16)))
+    ## high level interface
     elif args.command=='read_page':
-        proc(args,lambda p:p.read_page(args.addr))
-    elif args.command=='write_page':
-        proc(args,lambda p:p.write_page(args.addr))
+        proc(args,lambda p:p.read_whole_page(int(args.addr,16)))
 
 
 if __name__=='__main__':

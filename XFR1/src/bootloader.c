@@ -281,10 +281,11 @@ void session(uint8_t *buffer){
         addr|=c;
         
         // read byte-by-byte
-        addr=(addr<<PAGE_BYTES_N)>>PAGE_BYTES_N; // align to page
+        addr&=~((1<<PAGE_BYTES_N)-1); // align to page
         for(int i=0;i<(1<<PAGE_BYTES_N);i++)
             buffer[i]=pgm_read_byte(addr+i);
         
+        _delay_ms(10);
         send_byte(1<<PAGE_BYTES_N);
     }
     
@@ -299,7 +300,7 @@ void session(uint8_t *buffer){
         addr|=c;
         if(addr>=0x7000) return; // out of range
         
-        addr=(addr<<PAGE_BYTES_N)>>PAGE_BYTES_N; // align to page
+        addr&=~((1<<PAGE_BYTES_N)-1); // align to page
         for(int i=0;i<(1<<PAGE_BYTES_N);i+=2){
             uint16_t v=buffer[i]|(buffer[i+1]<<8);
             boot_page_fill(addr+i,v);
