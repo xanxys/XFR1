@@ -100,6 +100,13 @@ void tx_set(uint8_t v){
     }
 }
 
+void rx_enable(uint8_t v){
+    if(v)
+        PORTD|=_BV(7);
+    else
+        PORTD&=~_BV(7);
+}
+
 uint8_t rx_check(){
     return !(PIND&0x20);
 }
@@ -253,22 +260,21 @@ void session(){
 
 int main(){
     init();
-    PORTD|=_BV(6);
-//    tx_set(1);
-    while(1);
+    rx_enable(1);
+    _delay_ms(5);
     
     void (*userland)()=0;
     
-    if(0){ // PIND&0x20){
-        _delay_ms(200); // protect
-        while(1)
-            userland();
-    }
-    else{
+    if(rx_check()){
         _delay_ms(200); // protect
         while(1)
             do_power();
 //            session();
+    }
+    else{
+        _delay_ms(200); // protect
+        while(1)
+            userland();
     }
 }
 

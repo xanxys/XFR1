@@ -18,7 +18,7 @@ env.Append(BUILDERS=
     {"Copy":Builder(action="avr-objcopy $SOURCE -O ihex $TARGET")
     ,"Dump":Builder(action="avr-objdump -tdSr $SOURCE > $TARGET")
     ,"WriteProgrammer":Builder(action=
-        "sudo avrdude -p m328p -c arduino -p m328p -b 57600 -P /dev/ttyUSB1 -U flash:w:$SOURCE:i")
+        "sudo avrdude -p m328p -c arduino -p m328p -b 57600 -P /dev/ttyUSB0 -U flash:w:$SOURCE:i")
     })
 
 env.Alias('write',env.WriteProgrammer(None,'build/fw.hex'))
