@@ -111,7 +111,7 @@ class Ring(Programmer):
         self.recv_byte(100)
 
     def hash_buffer(self):
-        print('hasing buffer')
+        print('calculating hash of buffer')
         self.send_byte(3)
         
         print('waiting response')
@@ -208,6 +208,8 @@ def main():
     ## high level interface
     elif args.command=='read_page':
         proc(args,lambda p:p.read_whole_page(int(args.addr,16)))
+    elif args.command=='write_page': # debug
+        proc(args,lambda p:p.write_whole_page(int(args.addr,16),bytes([i for i in range(128)])))
 
 
 if __name__=='__main__':
