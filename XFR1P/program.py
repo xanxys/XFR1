@@ -1,6 +1,7 @@
 #!/bin/env python3
 import sys
 import serial
+import binascii
 import argparse
 import time
 import logging
@@ -158,7 +159,86 @@ class RingMemory(Ring):
                 'hash(dev)=%02x hash(data)=%02x'%(hr,hd))
         
         self.write_page(addr)
+
+    # hex level (bunch of highly localized (addr,data) pairs)
+    def program(self,datapath):
+        pages=pack_pages(decode_intel_hex(datapath))
+        print('writing %d bytes'%(sum(len(pages)*128))) # not really correct estimate
+        print('%d pages to go'%len(pages))
         
+        for pa,pd in pages.iteritems():
+            # page fetch needed if pd is partial
+            page=pd
+            if any([v==None for v in pd]):
+                page_curr=self.read_whole_page(pa)
+                if len(page_curr)!=len(pd):
+                    raise IOError('page size mismatch')
+                
+                page=bytes([pd[i] if pd[i]!=None else page_curr[i] for i in range(128)])
+            
+            # write page
+            self.write_whole_page(pa,page)
+            print('#')
+    
+    def verify(self,datapath):
+        pages=pack_pages(decode_intel_hex(datapath))
+        print('verifying %d bytes'%(sum(len(pages)*128))) # not really correct estimate
+        print('%d pages to go'%len(pages))
+        
+        for pa,pd in pages.iteritems():
+            page=self.read_whole_page(pa)
+            if len(page)!=len(pd):
+                raise IOError('page size mismatch')
+            
+            if page!=pd:
+                print('Error in page %04x'%pa)
+                return False
+        
+        return True
+    
+
+# see http://en.wikipedia.org/wiki/Intel_HEX
+def decode_intel_hex(path):
+    def parse_line(l):
+        if l[0]!=':':
+            raise IOError('expected ":"')
+        else:
+            byte_count=int(l[1:3],16)
+            address=int(l[3:7],16)
+            rec_type=int(l[7:9],16)
+            
+            if rec_type==0:
+                return {'address':address,'data':bytes.fromhex(l[9:9+2*byte_count])}
+            elif rec_type==1:
+                return None # EoF record
+            elif rec_type==3:
+                return None # start segment address record
+            else:
+                raise NotImplementedError('unknown record type %d'%rec_type)
+    
+    return list(filter(lambda x:x!=None,[parse_line(l) for l in open(path,'r') if l!='']))
+
+def pack_pages(cs):
+    '''
+    Take chunks from decode_intel_hex(...).
+    returns pageaddress -> [None or data]
+    '''
+    def align(x):
+        return x&0x7f
+    
+    pages={}
+    
+    for c in cs:
+        addr_st=c['address']
+        for ofs,d in enumerate(c['data']):
+            addr=addr_st+ofs
+            pa=align(addr)
+            po=addr-pa
+            
+            page=pages.get(pa,[None]*128)
+            page[po]=d
+    
+    return pages
         
     
 
@@ -179,14 +259,15 @@ def main():
     ps=argparse.ArgumentParser(description='optical programmer')
     ps.add_argument('-P',dest='port',help='port path (typically /dev/ttyUSBn)',required=True)
     ps.add_argument('--addr',dest='addr',help='memory address to read/write (in bytes)')
-    ps.add_argument('--data',dest='data')
+    ps.add_argument('--data',dest='data',help='hex value or path to intel hex file')
     ps.add_argument('--noreset_enter',dest='noreset_enter',default=False,const=True,
         action='store_const',help="don't reset to debug mode when entering session")
     ps.add_argument('--noreset_leave',dest='noreset_leave',default=False,const=True,
         action='store_const',help="don't reset to normal mode when leaving session")
     ps.add_argument('command',choices=[
         '_status','_read','_write','_hash','_read_page','_write_page', # Ring
-        'read_page','write_page'
+        'read_page','write_page',
+        'program'
         ])
     args=ps.parse_args()
     
@@ -207,10 +288,16 @@ def main():
         proc(args,lambda p:p.write_page(int(args.addr,16)))
     ## high level interface
     elif args.command=='read_page':
-        proc(args,lambda p:p.read_whole_page(int(args.addr,16)))
-    elif args.command=='write_page': # debug
-        proc(args,lambda p:p.write_whole_page(int(args.addr,16),bytes([i for i in range(128)])))
-
+        proc(args,lambda p:print(binascii.hexlify(p.read_whole_page(int(args.addr,16)))))
+    elif args.command=='write_page':
+        proc(args,lambda p:p.write_whole_page(int(args.addr,16),bytes.fromhex(args.data)))
+    ## common interface
+    elif args.command=='program':
+        def p_and_v(p):
+            p.program(args.data)
+            if p.verify(args.data):
+                print('programmed successfully!')
+        proc(args,p_and_v)
 
 if __name__=='__main__':
     logging.basicConfig(level=logging.DEBUG)
