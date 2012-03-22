@@ -219,7 +219,12 @@ void session(uint8_t *buffer){
         }
         
         boot_page_erase_safe(addr);
+        boot_spm_busy_wait();
+        
         boot_page_write_safe(addr);
+        boot_spm_busy_wait();
+        
+        boot_rww_enable(); // without this, written pages read as 0xff
         
         send_byte(1<<PAGE_BYTES_N);
     }

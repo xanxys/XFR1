@@ -66,58 +66,56 @@ class Programmer:
 # expose ring(XFR1) debug mode functionality via Programmer
 class Ring(Programmer):
     def get_power(self):
-        print('checking power')
+        logging.info('checking power')
         self.send_byte(2)
         
-        print('waiting response')
+        logging.info('waiting response')
         v=self.recv_byte(10)
-        print('Vcc=%.1f V'%(1.1/(v/256)))
+        return 1.1/(v/256)
 
     def read_buffer(self,addr):
-        print('reading buffer offset 0x%02x'%addr)
+        logging.info('reading buffer offset 0x%02x'%addr)
         self.send_byte(0)
         self.send_byte(addr)
         
-        print('waiting response')
+        logging.info('waiting response')
         v=self.recv_byte(10)
-        print('%02x'%v)
         return v
 
 
     def write_buffer(self,addr,data):
-        print('writing buffer offset 0x%02x'%addr)
+        logging.info('writing buffer offset 0x%02x'%addr)
         self.send_byte(1)
         self.send_byte(addr)
         self.send_byte(data)
         
-        print('waiting response')
+        logging.info('waiting response')
         self.recv_byte(10)
 
     def read_page(self,addr):
-        print('reading page 0x%04x to buffer'%addr)
+        logging.info('reading page 0x%04x to buffer'%addr)
         self.send_byte(4)
         self.send_byte((addr>>8)&0xff)
         self.send_byte(addr&0xff)
         
-        print('waiting response')
+        logging.info('waiting response')
         self.recv_byte(255)
 
     def write_page(self,addr):
-        print('writing page 0x%04x from buffer'%addr)
+        logging.info('writing page 0x%04x from buffer'%addr)
         self.send_byte(5)
         self.send_byte((addr>>8)&0xff)
         self.send_byte(addr&0xff)
 
-        print('waiting response')
+        logging.info('waiting response')
         self.recv_byte(100)
 
     def hash_buffer(self):
-        print('calculating hash of buffer')
+        logging.info('calculating hash of buffer')
         self.send_byte(3)
         
-        print('waiting response')
-        v=self.recv_byte(100)
-        print('%02x'%v)
+        logging.info('waiting response')
+        return self.recv_byte(100)
 
 
 # expose flash/buffer of Ring
@@ -147,9 +145,19 @@ class RingMemory(Ring):
         return bytes(vs)
     
     def write_whole_page(self,addr,data):
+        def set_offset_with_retry(ofs,d):
+            retry=0
+            while retry<3:
+                try:
+                    self.write_buffer(ofs,d)
+                    return
+                except IOError:
+                    retry+=1
+            raise IOError('too many retries. aborting page write.')
+        
         print('writing page %04x'%addr)
         for i in range(128):
-            self.write_buffer(i,data[i])
+            set_offset_with_retry(i,data[i])
         
         hr=self.hash_buffer()
         hd=xorshift_hash(data)
@@ -163,10 +171,10 @@ class RingMemory(Ring):
     # hex level (bunch of highly localized (addr,data) pairs)
     def program(self,datapath):
         pages=pack_pages(decode_intel_hex(datapath))
-        print('writing %d bytes'%(sum(len(pages)*128))) # not really correct estimate
+        print('writing %d bytes'%(len(pages)*128)) # not really correct estimate
         print('%d pages to go'%len(pages))
         
-        for pa,pd in pages.iteritems():
+        for pa,pd in pages.items():
             # page fetch needed if pd is partial
             page=pd
             if any([v==None for v in pd]):
@@ -182,17 +190,20 @@ class RingMemory(Ring):
     
     def verify(self,datapath):
         pages=pack_pages(decode_intel_hex(datapath))
-        print('verifying %d bytes'%(sum(len(pages)*128))) # not really correct estimate
+        print('verifying %d bytes'%(len(pages)*128)) # not really correct estimate
         print('%d pages to go'%len(pages))
         
-        for pa,pd in pages.iteritems():
+        for pa,pd in pages.items():
             page=self.read_whole_page(pa)
             if len(page)!=len(pd):
                 raise IOError('page size mismatch')
             
-            if page!=pd:
-                print('Error in page %04x'%pa)
-                return False
+            for i in range(128):
+                if pd[i]!=None and page[i]!=pd[i]:
+                    print('Error in page %04x, offset %02x'%(pa,i))
+                    print('expected:%02x'%pd[i])
+                    print('read:%02x'%page[i])
+                    return False
         
         return True
     
@@ -224,7 +235,7 @@ def pack_pages(cs):
     returns pageaddress -> [None or data]
     '''
     def align(x):
-        return x&0x7f
+        return x&0xff80
     
     pages={}
     
@@ -237,6 +248,7 @@ def pack_pages(cs):
             
             page=pages.get(pa,[None]*128)
             page[po]=d
+            pages[pa]=page
     
     return pages
         
@@ -267,20 +279,20 @@ def main():
     ps.add_argument('command',choices=[
         '_status','_read','_write','_hash','_read_page','_write_page', # Ring
         'read_page','write_page',
-        'program'
+        'program','verify'
         ])
     args=ps.parse_args()
     
     ## low level interface
     if args.command=='_status':
-        proc(args,lambda p:p.get_power())
+        proc(args,lambda p:print('Vcc=%.1f V'%(p.get_power())))
     # buffer manipulation
     elif args.command=='_read':
-        proc(args,lambda p:p.read_buffer(int(args.addr,16)))
+        proc(args,lambda p:print(p.read_buffer(int(args.addr,16))))
     elif args.command=='_write':
         proc(args,lambda p:p.write_buffer(int(args.addr,16),int(args.data,16)))
     elif args.command=='_hash':
-        proc(args,lambda p:p.hash_buffer())
+        proc(args,lambda p:print('hash=%02x'%p.hash_buffer()))
     # page manipulation
     elif args.command=='_read_page':
         proc(args,lambda p:p.read_page(int(args.addr,16)))
@@ -297,10 +309,19 @@ def main():
             p.program(args.data)
             if p.verify(args.data):
                 print('programmed successfully!')
+            else:
+                print('program failed')
         proc(args,p_and_v)
+    elif args.command=='verify':
+        def v(p):
+            if p.verify(args.data):
+                print('verify ok!')
+            else:
+                print('verify failed')
+        proc(args,v)
 
 if __name__=='__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARNING)
     main()
 
 
