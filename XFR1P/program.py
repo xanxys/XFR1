@@ -19,12 +19,23 @@ class Programmer:
     def __init__(self,serial_path):
         ser=serial.Serial(serial_path,19200)
         logging.info('opened %s'%ser)
+        
+        # hack: cf. http://stackoverflow.com/questions/8149628/pyserial-not-talking-to-arduino
+        # 2012/4/1: XFR1P is non-responding. gtkterm correctly.
+        # When I opened the port in gtkterm first, then it works correctly (although the readings
+        # are split in gtkterm and program.py)
+        # This hack seems to solve that port initiation problem.
+        ser.timeout=5
+        ser.readline()
+        ser.timeout=None
+        
         self.serial=ser
     
     # low level function
     def _send(self,command):
         logging.debug('programmer<%s'%command)
         self.serial.write(bytes(command+'\r\n','ASCII'))
+        self.serial.flush()
     
     def _receive(self):
         while True:
@@ -276,12 +287,15 @@ def main():
         action='store_const',help="don't reset to debug mode when entering session")
     ps.add_argument('--noreset_leave',dest='noreset_leave',default=False,const=True,
         action='store_const',help="don't reset to normal mode when leaving session")
+    ps.add_argument('--debug',dest='loglevel',default=logging.WARNING,const=logging.DEBUG,
+        action='store_const',help='enable very verbose logging')
     ps.add_argument('command',choices=[
         '_status','_read','_write','_hash','_read_page','_write_page', # Ring
         'read_page','write_page',
         'program','verify'
         ])
     args=ps.parse_args()
+    logging.basicConfig(level=args.loglevel)
     
     ## low level interface
     if args.command=='_status':
@@ -321,7 +335,6 @@ def main():
         proc(args,v)
 
 if __name__=='__main__':
-    logging.basicConfig(level=logging.WARNING)
     main()
 
 
